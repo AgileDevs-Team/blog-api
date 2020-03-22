@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @CrossOrigin
@@ -22,8 +23,9 @@ public class SearchController {
     }
 
     @GetMapping("/posts")
-    public ResponseEntity<SearchPostResponse> get(@RequestParam(value = "q", required = false) String query) throws IOException {
-        return ResponseEntity.ok(searchService.searchWithAggs(query));
+    public ResponseEntity<SearchPostResponse> get(@RequestParam(value = "q", required = false) String query,
+                                                  @RequestParam(value = "f", required = false) List<String> filters) throws IOException {
+        return ResponseEntity.ok(searchService.searchWithAggs(query, filters));
     }
 
 }

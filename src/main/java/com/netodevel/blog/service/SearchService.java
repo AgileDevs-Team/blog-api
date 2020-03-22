@@ -5,6 +5,7 @@ import com.netodevel.blog.domain.PostDocument;
 import com.netodevel.blog.web.Filters;
 import com.netodevel.blog.web.SearchPostResponse;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
@@ -26,6 +27,7 @@ import java.util.List;
 
 @Service
 @AllArgsConstructor
+@Slf4j
 public class SearchService {
 
     private static final String INDEX = "posts";
@@ -33,7 +35,7 @@ public class SearchService {
     private final RestHighLevelClient client;
     private final ObjectMapper objectMapper;
 
-    public SearchPostResponse searchWithAggs(String query) throws IOException {
+    public SearchPostResponse searchWithAggs(String query, List<String> filters) throws IOException {
         // Full Text Search
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         if (query != null && !query.replace(" ", "").isEmpty()) {
@@ -41,6 +43,16 @@ public class SearchService {
             boolQueryBuilder.should(QueryBuilders.nestedQuery("tags", QueryBuilders.multiMatchQuery(query, "tags.name"), ScoreMode.Avg).boost(1));
         } else {
             boolQueryBuilder.should(QueryBuilders.matchAllQuery());
+        }
+
+        // Post Filter
+        BoolQueryBuilder postFilterQuery = QueryBuilders.boolQuery();
+        BoolQueryBuilder orFilterQuery = QueryBuilders.boolQuery();
+        if (filters != null && !filters.isEmpty()) {
+            for (String filter : filters) {
+                orFilterQuery.should(QueryBuilders.nestedQuery("tags", QueryBuilders.termQuery("tags.name", filter), ScoreMode.Avg));
+            }
+            postFilterQuery.filter(orFilterQuery);
         }
 
         // Aggregations
@@ -53,16 +65,17 @@ public class SearchService {
                         );
 
         //Apply Request
-        SearchResponse searchResponse = applySearch(boolQueryBuilder, aggregationTags);
+        SearchResponse searchResponse = applySearch(boolQueryBuilder, postFilterQuery, aggregationTags);
         return convertToPostDocument(searchResponse);
     }
 
-    public SearchResponse applySearch(BoolQueryBuilder boolQueryBuilder, AggregationBuilder... aggs) throws IOException {
-        SearchRequest request = search(boolQueryBuilder, aggs);
+    public SearchResponse applySearch(BoolQueryBuilder boolQueryBuilder, BoolQueryBuilder postFilter, AggregationBuilder... aggs) throws IOException {
+        SearchRequest request = search(boolQueryBuilder, postFilter, aggs);
+
         return client.search(request, RequestOptions.DEFAULT);
     }
 
-    private SearchRequest search(BoolQueryBuilder boolQueryBuilder, AggregationBuilder[] aggs) {
+    private SearchRequest search(BoolQueryBuilder boolQueryBuilder, BoolQueryBuilder postFilter, AggregationBuilder[] aggs) {
         SearchRequest request = new SearchRequest(INDEX);
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -71,6 +84,10 @@ public class SearchService {
 
         if (boolQueryBuilder != null) {
             searchSourceBuilder.query(boolQueryBuilder);
+        }
+
+        if (postFilter != null) {
+            searchSourceBuilder.postFilter(postFilter);
         }
 
         for (AggregationBuilder agg : aggs) {
