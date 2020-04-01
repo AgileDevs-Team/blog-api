@@ -113,7 +113,9 @@ public class SearchService {
         List<PostDocument> postDocuments = new ArrayList<>();
 
         for (SearchHit hit : searchHit) {
-            postDocuments.add(objectMapper.convertValue(hit.getSourceAsMap(), PostDocument.class));
+            PostDocument postDocument = objectMapper.convertValue(hit.getSourceAsMap(), PostDocument.class);
+            postDocument.setId(hit.getId());
+            postDocuments.add(postDocument);
         }
         return new SearchPostResponse(postDocuments, filters);
     }
